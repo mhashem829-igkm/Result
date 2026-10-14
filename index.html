@@ -1,0 +1,79 @@
+<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#0f766e">
+<title>নম্বর সংগ্রহ</title>
+<style>
+:root{--p:#0f766e;--bg:#f1f5f9;--c:#fff;--t:#0f172a;--m:#64748b;--b:#cbd5e1}
+@media(prefers-color-scheme:dark){:root{--bg:#0f172a;--c:#1e293b;--t:#f1f5f9;--m:#94a3b8;--b:#334155}}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,"Noto Sans Bengali",sans-serif;background:var(--bg);color:var(--t)}
+header{background:var(--p);color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0}
+h1{font-size:18px;margin:0}#st{font-size:12px;padding:3px 8px;border-radius:99px;background:#fff3;}
+main{padding:12px;max-width:600px;margin:auto}
+.card{background:var(--c);border-radius:12px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:13px;color:var(--m);margin:8px 0 3px}
+input{width:100%;padding:11px;border:1px solid var(--b);border-radius:8px;font-size:16px;background:var(--bg);color:var(--t)}
+.r{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{padding:12px;border:0;border-radius:8px;background:var(--p);color:#fff;font-size:16px;width:100%;margin-top:10px}
+button.s{background:var(--m)}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;border-bottom:1px solid var(--b);text-align:left}
+.ok{color:#16a34a}.no{color:#d97706}.tw{overflow-x:auto}
+details summary{font-weight:600}
+</style></head><body>
+<header><h1>📝 নম্বর সংগ্রহ</h1><span id="st"></span></header>
+<main>
+<details class="card" id="cfg"><summary>⚙️ সেটিংস</summary>
+<label>শিক্ষকের নাম</label><input id="teacher">
+<label>Google Script URL (Web App)</label><input id="url" placeholder="https://script.google.com/macros/s/.../exec">
+<button onclick="saveCfg()">সংরক্ষণ</button></details>
+
+<div class="card">
+<div class="r"><div><label>শ্রেণি</label><input id="cls"></div><div><label>বিষয়</label><input id="subject"></div></div>
+<div class="r"><div><label>পরীক্ষা</label><input id="exam" placeholder="অর্ধবার্ষিক"></div><div><label>পূর্ণমান</label><input id="full" type="number" inputmode="decimal"></div></div>
+<div class="r"><div><label>রোল</label><input id="roll" inputmode="numeric"></div><div><label>প্রাপ্ত নম্বর</label><input id="marks" type="number" inputmode="decimal"></div></div>
+<label>নাম (ঐচ্ছিক)</label><input id="name">
+<button onclick="add()">✔ জমা দিন</button>
+</div>
+
+<div class="card"><button onclick="sync()" style="margin:0">☁️ এখনই সিঙ্ক করুন (<span id="pc">0</span> বাকি)</button>
+<button class="s" onclick="exp()">📥 Excel ডাউনলোড</button></div>
+
+<div class="card tw"><b>সাম্প্রতিক এন্ট্রি</b><table id="tb"></table></div>
+</main>
+<script>
+const $=i=>document.getElementById(i),L=k=>{try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}};
+let E=L('e')||[],G=L('g')||{},F=['cls','subject','exam','full'];
+function save(){localStorage.setItem('e',JSON.stringify(E))}
+function saveCfg(){G={teacher:$('teacher').value.trim(),url:$('url').value.trim()};localStorage.setItem('g',JSON.stringify(G));$('cfg').open=false;sync()}
+function add(){
+ const r={time:new Date().toISOString(),teacher:G.teacher||'',cls:$('cls').value.trim(),subject:$('subject').value.trim(),exam:$('exam').value.trim(),full:$('full').value,roll:$('roll').value.trim(),name:$('name').value.trim(),marks:$('marks').value,synced:false};
+ if(!r.cls||!r.subject||!r.exam||!r.roll||r.marks===''){alert('শ্রেণি, বিষয়, পরীক্ষা, রোল ও নম্বর আবশ্যক');return}
+ if(r.full&&+r.marks>+r.full){alert('প্রাপ্ত নম্বর পূর্ণমানের বেশি!');return}
+ const i=E.findIndex(x=>x.cls==r.cls&&x.subject==r.subject&&x.exam==r.exam&&x.roll==r.roll);
+ if(i>=0){if(!confirm('এই রোলে আগে নম্বর দেওয়া আছে। পরিবর্তন করবেন?'))return;E[i]=r}else E.push(r);
+ F.forEach(f=>localStorage.setItem('f_'+f,$(f).value));save();
+ ['roll','name','marks'].forEach(f=>$(f).value='');$('roll').focus();render();sync();
+}
+async function sync(){
+ const p=E.filter(x=>!x.synced);if(!p.length||!G.url||!navigator.onLine)return;
+ try{
+  const res=await fetch(G.url,{method:'POST',body:JSON.stringify({rows:p})});
+  const j=await res.json();
+  if(j.ok){p.forEach(x=>x.synced=true);save();render()}else alert('সিঙ্ক ব্যর্থ: '+j.error)
+ }catch(e){/* offline বা নেটওয়ার্ক সমস্যা, পরে আবার চেষ্টা হবে */}
+}
+function render(){
+ $('pc').textContent=E.filter(x=>!x.synced).length;
+ $('st').textContent=navigator.onLine?'🟢 অনলাইন':'🔴 অফলাইন';
+ $('tb').innerHTML='<tr><th>রোল</th><th>বিষয়</th><th>নম্বর</th><th></th></tr>'+E.slice(-15).reverse().map(x=>`<tr><td>${x.roll}</td><td>${x.cls}/${x.subject}</td><td>${x.marks}${x.full?'/'+x.full:''}</td><td class="${x.synced?'ok':'no'}">${x.synced?'✔':'⏳'}</td></tr>`).join('');
+}
+function exp(){
+ const h=['তারিখ','শিক্ষক','শ্রেণি','বিষয়','পরীক্ষা','পূর্ণমান','রোল','নাম','প্রাপ্ত নম্বর'];
+ const t='<html><head><meta charset="utf-8"></head><body><table border="1"><tr>'+h.map(x=>'<th>'+x+'</th>').join('')+'</tr>'+E.map(x=>'<tr>'+[x.time.slice(0,10),x.teacher,x.cls,x.subject,x.exam,x.full,x.roll,x.name,x.marks].map(v=>'<td>'+(v??'')+'</td>').join('')+'</tr>').join('')+'</table></body></html>';
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'application/vnd.ms-excel'}));a.download='marks.xls';a.click();
+}
+$('teacher').value=G.teacher||'';$('url').value=G.url||'';F.forEach(f=>$(f).value=localStorage.getItem('f_'+f)||'');
+if(!G.url)$('cfg').open=true;
+addEventListener('online',()=>{render();sync()});addEventListener('offline',render);
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+render();sync();
+</script></body></html>
